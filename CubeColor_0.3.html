@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Интерактивный Гексагон с линейкой</title>
+    <style>
+      /* Фон, имитирующий деревянную поверхность */
+      body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #a69c90;
+        background-image: repeating-linear-gradient(
+          45deg,
+          transparent,
+          transparent 10px,
+          rgba(0, 0, 0, 0.05) 10px,
+          rgba(0, 0, 0, 0.05) 20px
+        );
+        font-family: "Arial", sans-serif;
+      }
+
+      /* Контейнер для всей сетки */
+      #hex-grid {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+
+      /* Стили для каждого горизонтального ряда */
+      .hex-row {
+        display: flex;
+        justify-content: center;
+      }
+
+      /* Магия для создания сот: каждый следующий ряд поднимается вверх */
+      .hex-row:not(:first-child) {
+        margin-top: -6px;
+      }
+
+      /* Стили для одной бусины (общие для гексагона и линейки) */
+      .bead {
+        width: 42px;
+        height: 42px;
+        margin: 2px;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow:
+          2px 2px 5px rgba(0, 0, 0, 0.5),
+          inset -3px -3px 8px rgba(0, 0, 0, 0.6),
+          inset 3px 3px 8px rgba(255, 255, 255, 0.4);
+        transition: all 0.15s ease;
+        background: radial-gradient(circle at 35% 35%, #6dd5ed, #2193b0 80%);
+
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: #fff;
+        font-weight: bold;
+        font-size: 15px;
+        text-shadow:
+          1px 1px 3px rgba(0, 0, 0, 0.9),
+          0 0 5px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        flex-shrink: 0; /* Чтобы шары не сжимались в линейке */
+      }
+
+      .bead.purple {
+        background: radial-gradient(circle at 35% 35%, #d18aff, #6200ea 80%);
+      }
+
+      .bead:hover {
+        transform: scale(1.15);
+        z-index: 10;
+        box-shadow:
+          2px 2px 8px rgba(0, 0, 0, 0.7),
+          inset -3px -3px 8px rgba(0, 0, 0, 0.6),
+          inset 3px 3px 8px rgba(255, 255, 255, 0.6);
+      }
+
+      /* --- СТИЛИ ДЛЯ СЧЕТЧИКА --- */
+      #stats-container {
+        margin-top: 20px;
+        padding: 15px 25px;
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        font-size: 18px;
+        text-align: center;
+        color: #333;
+        min-width: 250px;
+        transition: all 0.3s ease;
+      }
+
+      .stat-line {
+        margin: 5px 0;
+      }
+
+      .exceeded {
+        color: #d32f2f;
+        font-weight: bold;
+        font-size: 20px;
+      }
+
+      #warning-msg {
+        margin-top: 10px;
+        color: #d32f2f;
+        font-weight: bold;
+        font-size: 16px;
+        min-height: 20px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      #warning-msg.active {
+        opacity: 1;
+      }
+
+      /* --- СТИЛИ ДЛЯ ЛИНЕЙКИ --- */
+      #ruler-container {
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        max-width: 95vw;
+        overflow-x: auto; /* Горизонтальный скролл, если не влезает */
+      }
+
+      #ruler {
+        display: flex;
+        flex-wrap: wrap; /* Позволяет переносить шары на новую строку, если экран узкий */
+        gap: 2px;
+        justify-content: center;
+      }
+
+      /* Уменьшаем размер шаров в линейке, чтобы они лучше смотрелись в ряд */
+      #ruler .bead {
+        width: 32px;
+        height: 32px;
+        margin: 1px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hex-grid"></div>
+
+    <!-- Блок счетчика -->
+    <div id="stats-container">
+      <div class="stat-line">Синих шаров: <span id="blue-count">0</span></div>
+      <div class="stat-line">
+        Фиолетовых шаров: <span id="purple-count">0</span>
+      </div>
+      <div id="warning-msg"></div>
+    </div>
+
+    <!-- Линейка с шарами по порядку номеров -->
+    <div id="ruler-container">
+      <div id="ruler"></div>
+    </div>
+
+    <script>
+      // Начальные цвета (B - Blue/Синий, P - Purple/Фиолетовый)
+      const gridData = [
+        "BBPBB",
+        "BPBBPB",
+        "PBPBPBP",
+        "BBPPPBPB",
+        "BBPBPBPBB",
+        "BBPPPBBB",
+        "BBPPBPB",
+        "BBBBBB",
+        "PPPPP",
+      ];
+
+      // ИДЕАЛЬНАЯ КАРТА СПИРАЛИ (Без пропусков)
+      const spiralPath = [
+        [4, 4], // 1
+        // Кольцо 1
+        [5, 4],
+        [5, 3],
+        [4, 3],
+        [3, 3],
+        [3, 4],
+        [4, 5], // 2-7
+        // Кольцо 2
+        [5, 5],
+        [6, 4],
+        [6, 3],
+        [6, 2],
+        [5, 2],
+        [4, 2],
+        [3, 2],
+        [2, 2],
+        [2, 3],
+        [2, 4],
+        [3, 5],
+        [4, 6],
+        [5, 6], // 8-20
+        // Кольцо 3 (до 34-го номера)
+        [6, 5],
+        [7, 4],
+        [7, 3],
+        [7, 2],
+        [7, 1],
+        [6, 1],
+        [5, 1],
+        [4, 1],
+        [3, 1],
+        [2, 1],
+        [1, 1],
+        [1, 2],
+        [1, 3],
+        [1, 4], // 21-34
+        // Кольцо 4 (Переход 34->35 как 6->7, 35->36 как 17->18)
+        [2, 5],
+        [3, 6],
+        [4, 7],
+        [5, 7],
+        [6, 6],
+        [7, 5],
+        [8, 4],
+        [8, 3],
+        [8, 2],
+        [8, 1],
+        [8, 0],
+        [7, 0],
+        [6, 0],
+        [5, 0],
+        [4, 0],
+        [3, 0],
+        [2, 0],
+        [1, 0],
+        [0, 0],
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+        [1, 5], // 35-58
+        // Оставшиеся 3 пустые ячейки для идеального заполнения
+        [2, 6],
+        [3, 7],
+        [4, 8], // 59-61
+      ];
+
+      // Создаем матрицу 9x9 для расстановки номеров
+      const numberMap = Array(9)
+        .fill(null)
+        .map(() => Array(9).fill(null));
+
+      // Заполняем матрицу номерами
+      spiralPath.forEach((pos, index) => {
+        const [r, c] = pos;
+        numberMap[r][c] = index + 1;
+      });
+
+      const gridContainer = document.getElementById("hex-grid");
+      const blueCountEl = document.getElementById("blue-count");
+      const purpleCountEl = document.getElementById("purple-count");
+      const warningMsgEl = document.getElementById("warning-msg");
+      const rulerContainer = document.getElementById("ruler");
+
+      // Хранилище ссылок на элементы шаров по их номеру (для синхронизации)
+      const beadsByNumber = {};
+
+      // Функция обновления счетчиков
+      function updateCounters() {
+        const beads = document.querySelectorAll("#hex-grid .bead"); // Считаем только шары в гексагоне
+        let purpleCount = 0;
+
+        beads.forEach((bead) => {
+          if (bead.classList.contains("purple")) {
+            purpleCount++;
+          }
+        });
+
+        const totalBeads = beads.length;
+        const blueCount = totalBeads - purpleCount;
+
+        blueCountEl.textContent = blueCount;
+        purpleCountEl.textContent = purpleCount;
+
+        blueCountEl.classList.remove("exceeded");
+        purpleCountEl.classList.remove("exceeded");
+        warningMsgEl.classList.remove("active");
+        warningMsgEl.textContent = "";
+
+        let warnings = [];
+
+        if (blueCount > 36) {
+          blueCountEl.classList.add("exceeded");
+          warnings.push("Превышение синих шаров!");
+        }
+
+        if (purpleCount > 36) {
+          purpleCountEl.classList.add("exceeded");
+          warnings.push("Превышение фиолетовых шаров!");
+        }
+
+        if (warnings.length > 0) {
+          warningMsgEl.textContent = warnings.join(" ");
+          warningMsgEl.classList.add("active");
+        }
+      }
+
+      // Функция переключения цвета и синхронизации между гексагоном и линейкой
+      function toggleColor(number) {
+        const beadInGrid = beadsByNumber[number].grid;
+        const beadInRuler = beadsByNumber[number].ruler;
+
+        // Переключаем класс в гексагоне
+        beadInGrid.classList.toggle("purple");
+
+        // Синхронизируем с линейкой
+        if (beadInGrid.classList.contains("purple")) {
+          beadInRuler.classList.add("purple");
+        } else {
+          beadInRuler.classList.remove("purple");
+        }
+
+        updateCounters();
+      }
+
+      // Генерируем сетку (гексагон)
+      gridData.forEach((rowString, rowIndex) => {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "hex-row";
+
+        for (let colIndex = 0; colIndex < rowString.length; colIndex++) {
+          const bead = document.createElement("div");
+          bead.className = "bead";
+
+          if (rowString[colIndex] === "P") {
+            bead.classList.add("purple");
+          }
+
+          const number = numberMap[rowIndex][colIndex];
+          if (number) {
+            bead.textContent = number;
+            // Сохраняем ссылку на шар в гексагоне
+            if (!beadsByNumber[number]) beadsByNumber[number] = {};
+            beadsByNumber[number].grid = bead;
+          }
+
+          bead.addEventListener("click", () => {
+            if (number) toggleColor(number);
+          });
+
+          rowDiv.appendChild(bead);
+        }
+
+        gridContainer.appendChild(rowDiv);
+      });
+
+      // Генерируем линейку (сортируем по номерам от 1 до 61)
+      for (let i = 1; i <= 61; i++) {
+        const bead = document.createElement("div");
+        bead.className = "bead";
+
+        // Находим шар в гексагоне, чтобы взять его начальный цвет
+        const gridBead = beadsByNumber[i].grid;
+        if (gridBead.classList.contains("purple")) {
+          bead.classList.add("purple");
+        }
+
+        bead.textContent = i;
+
+        // Сохраняем ссылку на шар в линейке
+        beadsByNumber[i].ruler = bead;
+
+        // Добавляем обработчик клика для линейки
+        bead.addEventListener("click", () => {
+          toggleColor(i);
+        });
+
+        rulerContainer.appendChild(bead);
+      }
+
+      // Инициализация счетчика
+      updateCounters();
+    </script>
+  </body>
+</html>
