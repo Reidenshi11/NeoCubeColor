@@ -168,15 +168,15 @@
     <script>
       // Начальные цвета (B - Blue/Синий, P - Purple/Фиолетовый)
       const gridData = [
-        "BBPBB",
-        "BPBBPB",
+        "BBBBB",
+        "BPPPPB",
+        "BPBPBPB",
+        "BPBBBBPB",
+        "BBPBBBPBB",
+        "PBPBBPBP",
         "PBPBPBP",
-        "BBPPPBPB",
-        "BBPBPBPBB",
-        "BBPPPBBB",
-        "BBPPBPB",
-        "BBBBBB",
-        "PPPPP",
+        "PBPPBP",
+        "PBPBP",
       ];
 
       // ИДЕАЛЬНАЯ КАРТА СПИРАЛИ (Без пропусков)
@@ -246,7 +246,7 @@
         // Оставшиеся 3 пустые ячейки для идеального заполнения
         [2, 6],
         [3, 7],
-        [4, 8], // 59-61
+        [4, 8], // 61
       ];
 
       // Создаем матрицу 9x9 для расстановки номеров
@@ -359,7 +359,7 @@
       });
 
       // Генерируем линейку (сортируем по номерам от 1 до 61)
-      for (let i = 1; i <= 61; i++) {
+      for (let i = 1; i <= 40; i++) {
         const bead = document.createElement("div");
         bead.className = "bead";
 
